@@ -7,6 +7,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+qwen2.5-coder-1.5b-qlora/
 .Python
 build/
 develop-eggs/
@@ -205,3 +206,4 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+Notes for the README file.txt
