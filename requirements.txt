@@ -1,0 +1,13 @@
+﻿# Core ML stack
+torch
+transformers
+peft
+bitsandbytes
+accelerate
+
+# Data
+
+datasets
+
+# System / GPU utils
+pynvml
