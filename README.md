@@ -227,8 +227,6 @@ This folder contains the standard checkpoint files created by the Hugging Face T
 
 ## Key Takeaways
 
-- **PT stage** provides general language + code knowledge  
-- **IT stage** (this project) specializes model for diff summarization  
 - **QLoRA** enables large-model tuning on consumer hardware (8GB VRAM) with minimal quality loss
 - Dataset quality strongly affects performance  
 - Perplexity ≈ 17 indicates strong modeling for this task
