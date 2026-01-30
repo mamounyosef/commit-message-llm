@@ -1,3 +1,4 @@
+import math
 from datasets import load_dataset
 from pynvml import *
 import random
@@ -8,7 +9,6 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import TrainingArguments, Trainer, DataCollatorForSeq2Seq
-
 
 def print_gpu_utilization():
     nvmlInit()
@@ -22,12 +22,9 @@ def print_summary(result):
     print(f"Samples/second: {result.metrics['train_samples_per_second']:.2f}")
     print_gpu_utilization()
 
-
 print_gpu_utilization()
 
-# ----------------------------
-# Load + inspect dataset
-# ----------------------------
+
 ds = load_dataset("Maxscha/commitbench")
 
 print("Splits:", list(ds.keys()))
@@ -112,8 +109,8 @@ diff_col, msg_col = infer_columns(ds[sample_split][0])
 print(f"\nInferred columns -> diff: {diff_col}, message: {msg_col}")
 
 # Use inferred columns when possible, otherwise fall back
-DIFF_COL = diff_col or "diff"
-MSG_COL = msg_col or "message"
+DIFF_COL = "diff"
+MSG_COL = "message"
 
 
 # Basic length stats (raw)
@@ -151,6 +148,8 @@ REF_ONLY_RE = re.compile(
     re.IGNORECASE
 )
 
+
+PLACEHOLDER_RE = re.compile(r"<HASH>|<URL>|#<I>|\(#<I>\)")
 
 def normalize_newlines(s: str) -> str:
     return s.replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -205,15 +204,23 @@ TRAIN_SAMPLES = 120000
 VAL_SAMPLES = 15000
 TEST_SAMPLES = 15000
 
-ds_clean["train"] = ds_clean["train"].shuffle(seed=42).select(range(TRAIN_SAMPLES))
-ds_clean["validation"] = ds_clean["validation"].shuffle(seed=42).select(range(VAL_SAMPLES))
-ds_clean["test"] = ds_clean["test"].shuffle(seed=42).select(range(TEST_SAMPLES))
+def _cap(n, limit):
+    return min(n, limit)
+
+ds_clean["train"] = ds_clean["train"].shuffle(seed=9105).select(
+    range(_cap(len(ds_clean["train"]), TRAIN_SAMPLES))
+)
+ds_clean["validation"] = ds_clean["validation"].shuffle(seed=9105).select(
+    range(_cap(len(ds_clean["validation"]), VAL_SAMPLES))
+)
+ds_clean["test"] = ds_clean["test"].shuffle(seed=9105).select(
+    range(_cap(len(ds_clean["test"]), TEST_SAMPLES))
+)
 
 print("\nReduced dataset:")
 print(f"- train: {len(ds_clean['train'])} samples")
 print(f"- validation: {len(ds_clean['validation'])} samples")
 print(f"- test: {len(ds_clean['test'])} samples")
-
 
 # ----------------------------
 # Load model + tokenizer (QLoRA)
@@ -232,12 +239,11 @@ model = AutoModelForCausalLM.from_pretrained(
     MODEL_ID,
     quantization_config=quant_config,
     device_map="auto",
-    torch_dtype=torch.bfloat16,
+    dtype=torch.bfloat16,
     attn_implementation="sdpa",  # PyTorch SDPA (not FlashAttention2)
 )
 
 model.eval()
-
 
 # Sanity check: approximate token counts using the tokenizer
 
@@ -272,16 +278,15 @@ for split_name in ["train", "validation", "test"]:
 
 print_gpu_utilization()
 
-
 # ----------------------------
 # Tokenize for causal LM training (raw continuation)
 # ----------------------------
-MAX_LENGTH = 384
+MAX_LENGTH = 512
 
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 
-SEP = "\n\n"
+SEP = "\n\nCommit message:\n"
 
 def tokenize_batch(batch):
     input_ids_list = []
@@ -289,8 +294,8 @@ def tokenize_batch(batch):
     labels_list = []
 
     for diff, msg in zip(batch[DIFF_COL], batch[MSG_COL]):
-        prompt_text = diff
-        full_text = diff + SEP + msg
+        prompt_text = diff + SEP
+        full_text   = diff + SEP + msg + tokenizer.eos_token
 
         prompt_ids = tokenizer(
             prompt_text,
@@ -340,21 +345,25 @@ tokenized_test = ds_clean["test"].map(
     remove_columns=ds_clean["test"].column_names,
 )
 
+def _assert_nonempty(split, name):
+    n = len(split)
+    if n == 0:
+        raise ValueError(f"{name} split is empty after filtering/selection. Check thresholds or sample caps.")
+    return n
 
-# ----------------------------
-# LoRA setup
-# ----------------------------
+_assert_nonempty(tokenized_train, "train")
+_assert_nonempty(tokenized_val, "validation")
+
 model = prepare_model_for_kbit_training(model)
 
 lora_config = LoraConfig(
-    r=8,
-    lora_alpha=16,
+    r=16,
+    lora_alpha=32,
     lora_dropout=0.05,
     bias="none",
     task_type="CAUSAL_LM",
     target_modules=[
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
+        "q_proj", "k_proj", "v_proj", "o_proj"
     ],
 )
 
@@ -362,7 +371,6 @@ model = get_peft_model(model, lora_config)
 model.print_trainable_parameters()
 model.gradient_checkpointing_enable()
 model.config.use_cache = False  # required with gradient checkpointing
-
 
 # ----------------------------
 # Training setup
@@ -375,11 +383,11 @@ data_collator = DataCollatorForSeq2Seq(
 )
 
 OUTPUT_DIR = "qwen2.5-coder-0.5b-qlora"
-PER_DEVICE_TRAIN_BATCH = 4
-PER_DEVICE_EVAL_BATCH = 4
-GRAD_ACCUM_STEPS = 4
-LEARNING_RATE = 2e-4
-NUM_EPOCHS = 1
+PER_DEVICE_TRAIN_BATCH = 6
+PER_DEVICE_EVAL_BATCH = 6
+GRAD_ACCUM_STEPS = 8
+LEARNING_RATE = 1.8e-4 # the starting lr was 2e-4
+NUM_EPOCHS = 2
 
 train_args = TrainingArguments(
     output_dir=OUTPUT_DIR,
@@ -389,17 +397,18 @@ train_args = TrainingArguments(
     learning_rate=LEARNING_RATE,
     num_train_epochs=NUM_EPOCHS,
     lr_scheduler_type="cosine",
-    warmup_ratio=0.03,
-    logging_steps=50,
-    save_steps=700,
-    eval_steps=700,
+    warmup_ratio=0.04,
+    logging_steps=30,
+    max_steps=6000,
+    save_steps=300,
+    eval_steps=300,
     eval_strategy="steps",
     save_strategy="steps",
     fp16=False,
     bf16=True,
     report_to="none",
     remove_unused_columns=False,
-    dataloader_num_workers=4,   
+    dataloader_num_workers=8,   
     dataloader_pin_memory=True,
     gradient_checkpointing=True,
     optim="paged_adamw_8bit",
@@ -417,60 +426,100 @@ trainer = Trainer(
 )
 
 
-# ----------------------------
 # Full training run
-# ----------------------------
-train_result = trainer.train()
+train_result = trainer.train()   
 print(train_result)
 
 
-# Save metrics
-import json as _json
-from pathlib import Path as _Path
 
-metrics_path = _Path(OUTPUT_DIR) / "metrics.json"
-metrics_path.parent.mkdir(parents=True, exist_ok=True)
-metrics_path.write_text(_json.dumps(trainer.state.log_history, indent=2), encoding="utf-8")
-print(f"Saved metrics to {metrics_path}")
+# Evaluate validation
+print("\nEvaluating on validation set...")
+val_metrics = trainer.evaluate(eval_dataset=tokenized_val, metric_key_prefix="val")
+val_loss = val_metrics.get("val_loss")
+val_ppl = math.exp(val_loss) if val_loss is not None else None
+
+# Evaluate test
+print("\nEvaluating on test set...")
+test_metrics = trainer.evaluate(eval_dataset=tokenized_test, metric_key_prefix="test")
+test_loss = test_metrics.get("test_loss")
+test_ppl = math.exp(test_loss) if test_loss is not None else None
+
+print("Validation metrics:", val_metrics)
+print("Validation perplexity:", val_ppl)
+print("Test metrics:", test_metrics)
+print("Test perplexity:", test_ppl)
 
 
-# ----------------------------
-# Quick inference test
-# ----------------------------
-model.eval()
-model.config.use_cache = True
+# Testing on random samples from the test sets
+def sample_eval_tokenized(tokenized_test, tokenizer, model, n=5, max_new_tokens=64):
+    print(f"\n\nSampling {n} examples from the test set for qualitative evaluation:")
 
-test_diff = """diff --git a/src/auth.py b/src/auth.py
-index a1b2c3d..e4f5g6h 100644
---- a/src/auth.py
-+++ b/src/auth.py
-@@ -42,7 +42,11 @@ def validate_token(token):
--    if not token:
--        return False
-+    if token is None:
-+        return False
-+
-+    token = token.strip()
-+    if token == "":
-+        return False
- 
-     return token in ACTIVE_TOKENS
+    rnd = random.Random()
+    idxs = rnd.sample(range(len(tokenized_test)), k=min(n, len(tokenized_test)))
 
-"""
+    model.eval()
+    for idx in idxs:
+        ex = tokenized_test[idx]
+        input_ids = ex["input_ids"]
+        labels = ex["labels"]
 
-inputs = tokenizer(test_diff, return_tensors="pt").to("cuda")
+        # prompt length = leading -100 labels
+        prompt_len = 0
+        for l in labels:
+            if l == -100:
+                prompt_len += 1
+            else:
+                break
 
-with torch.no_grad():
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=50,
-        temperature=0.7,
-        do_sample=True,
-        top_p=0.9,
-        pad_token_id=tokenizer.eos_token_id,
-    )
+        if prompt_len >= len(labels):
+            print(f"Index {idx}: skipped (no target tokens)")
+            continue
 
-generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-commit_message = generated_text[len(test_diff):].strip()
-print("Generated Commit Message:")
-print(commit_message)
+        prompt_ids = input_ids[:prompt_len]
+        target_ids = [l for l in labels if l != -100]
+
+        # Generate from prompt_ids directly
+        inputs = {
+            "input_ids": torch.tensor([prompt_ids], device=model.device),
+            "attention_mask": torch.tensor([[1] * len(prompt_ids)], device=model.device),
+        }
+        with torch.no_grad():
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=30,
+                do_sample=False,        # greedy decoding
+                num_beams=1,
+                repetition_penalty=1.1,
+                no_repeat_ngram_size=3,
+                eos_token_id=tokenizer.eos_token_id,
+                pad_token_id=tokenizer.eos_token_id,
+            )
+
+
+        gen_ids = outputs[0].tolist()
+        gen_text = tokenizer.decode(gen_ids, skip_special_tokens=True)
+        prompt_text = tokenizer.decode(prompt_ids, skip_special_tokens=True)
+
+        pred_msg = gen_text[len(prompt_text):].strip()
+        gt_msg = tokenizer.decode(target_ids, skip_special_tokens=True).strip()
+
+        print("=" * 80)
+        print(f"Index: {idx}")
+        print("- Prompt (truncated):")
+        print(prompt_text[:800] + ("..." if len(prompt_text) > 800 else ""))
+        print("\n- Ground truth:")
+        print(gt_msg)
+        print("\n- Model output:")
+        print(pred_msg)
+
+# Usage:
+sample_eval_tokenized(
+    tokenized_test=tokenized_test,
+    tokenizer=tokenizer,
+    model=model,
+    n=2,
+    max_new_tokens=64,
+)
+
+
+

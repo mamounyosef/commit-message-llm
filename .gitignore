@@ -8,6 +8,9 @@ __pycache__/
 
 # Distribution / packaging
 qwen2.5-coder-1.5b-qlora/
+qwen2.5-coder-0.5b-qlora/
+tokenized_data/
+cleaned_data/
 .Python
 build/
 develop-eggs/
@@ -207,3 +210,4 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 Notes for the README file.txt
+fine_tune.ipynb
