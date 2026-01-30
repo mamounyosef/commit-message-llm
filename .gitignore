@@ -7,8 +7,6 @@ __pycache__/
 *.so
 
 # Distribution / packaging
-qwen2.5-coder-1.5b-qlora/
-qwen2.5-coder-0.5b-qlora/
 tokenized_data/
 cleaned_data/
 .Python
