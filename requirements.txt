@@ -1,13 +1,12 @@
-﻿# Core ML stack
-torch
-transformers
-peft
-bitsandbytes
-accelerate
+# Core ML stack (pinned)
+torch==2.9.1+cu128
+transformers==4.57.3
+peft==0.18.1
+bitsandbytes==0.48.2
+accelerate==1.12.0
 
-# Data
+# Data (pinned)
+datasets==4.4.1
 
-datasets
-
-# System / GPU utils
-pynvml
+# System / GPU utils (pinned)
+pynvml==13.0.1
