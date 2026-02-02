@@ -1,0 +1,136 @@
+# Configuration for Commit Message LLM Training
+
+# Model configuration
+model:
+  model_id: "Qwen/Qwen2.5-Coder-0.5B"
+  load_in_4bit: true
+  bnb_4bit_quant_type: "nf4"
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: "bfloat16"
+  max_length: 512
+  use_fast_tokenizer: true
+
+  # LoRA configuration
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.05
+  lora_bias: "none"
+  lora_target_modules:
+    - "q_proj"
+    - "k_proj"
+    - "v_proj"
+    - "o_proj"
+
+  # Generation parameters
+  max_new_tokens: 30
+  do_sample: false
+  repetition_penalty: 1.1
+  no_repeat_ngram_size: 3
+
+  # Attention implementation
+  attn_implementation: "sdpa"
+
+# Data configuration
+data:
+  dataset_name: "Maxscha/commitbench"
+  dataset_cache_dir: null
+
+  # Column names (null = auto-infer)
+  diff_column: null
+  message_column: null
+
+  # Filtering
+  min_diff_chars: 50
+  max_diff_chars: 8000
+  min_message_chars: 3
+  min_message_words: 3
+
+  # Dataset size limits
+  train_samples: 120000
+  val_samples: 15000
+  test_samples: 15000
+  shuffle_seed: 9105
+
+  # Text separator
+  separator: "\n\nCommit message:\n"
+
+  # Bad message patterns to filter
+  bad_exact_messages:
+    - "update"
+    - "updated"
+    - "fix"
+    - "fixed"
+    - "wip"
+    - "."
+    - ".."
+    - "..."
+    - "temp"
+    - "test"
+
+  # Cached tokenized data paths
+  tokenized_train_path: "tokenized_data/train"
+  tokenized_val_path: "tokenized_data/validation"
+  tokenized_test_path: "tokenized_data/test"
+  cleaned_data_path: "cleaned_data"
+
+  # Use cached tokenized data if available
+  use_cached_tokenized: true
+
+# Training configuration
+training:
+  output_dir: "qwen2.5-coder-0.5b-qlora"
+
+  # Batch sizes
+  per_device_train_batch_size: 6
+  per_device_eval_batch_size: 6
+  gradient_accumulation_steps: 8
+
+  # Learning rate
+  learning_rate: 0.00018
+  num_train_epochs: 2.0
+  max_steps: 6000
+
+  # Scheduler
+  lr_scheduler_type: "cosine"
+  warmup_ratio: 0.04
+
+  # Logging and saving
+  logging_steps: 30
+  save_steps: 300
+  eval_steps: 300
+
+  # Precision
+  fp16: false
+  bf16: true
+
+  # Optimization
+  optim: "paged_adamw_8bit"
+  max_grad_norm: 1.0
+
+  # Data loading
+  dataloader_num_workers: 8
+  dataloader_pin_memory: true
+  group_by_length: true
+
+  # Gradient checkpointing
+  gradient_checkpointing: true
+
+  # Early stopping
+  early_stopping_patience: 5
+  early_stopping_threshold: 0.0
+
+  # Reporting (empty list = no reporting)
+  report_to: []
+
+  # Random seed
+  seed: 42
+
+  # Evaluation samples for qualitative testing
+  eval_samples: 5
+
+# Logging configuration
+logging:
+  level: "INFO"
+  log_file: "logs/training.log"
+  log_to_console: true
+  format_string: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"

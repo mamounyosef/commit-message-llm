@@ -6,6 +6,86 @@ Fine-tuning **Qwen2.5-Coder-0.5B** LLM using **QLoRA** (4-bit quantization + LoR
 
 ---
 
+## Quick Start
+
+### Installation
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### Training
+
+```bash
+# Train with default configuration (config.yaml)
+python train.py
+
+# Train with custom hyperparameters
+python train.py --learning-rate 1e-4 --max-steps 3000 --batch-size 4
+
+# Evaluate only (skip training)
+python train.py --eval-only
+
+# View all options
+python train.py --help
+```
+
+### Inference
+
+```bash
+# Generate from a diff string
+python infer.py --diff "diff --git a/file.py b/file.py..."
+
+# Generate from current git diff
+python infer.py --git
+
+# Interactive mode (read diff from stdin)
+echo "diff --git..." | python infer.py --interactive
+
+# Generate from a file
+python infer.py --diff-file changes.patch
+
+# Output in JSON format
+python infer.py --git --json
+
+# Save to file
+python infer.py --git --output commit_message.txt
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=commit_message_llm --cov-report=html
+```
+
+---
+
+## Project Structure
+
+```
+commit-message-llm/
+├── commit_message_llm/       # Python package
+│   ├── config/               # Configuration management
+│   ├── data/                 # Data processing & tokenization
+│   ├── model/                # Model setup & LoRA config
+│   ├── training/             # Training logic & callbacks
+│   ├── evaluation/           # Metrics & evaluation
+│   ├── inference/            # Commit message generation
+│   └── utils/                # Logging & GPU utilities
+├── tests/                    # Unit tests
+├── config.yaml               # Configuration file
+├── train.py                  # Training entry point
+├── infer.py                  # Inference entry point
+└── requirements.txt          # Dependencies
+```
+
+---
+
 ## Task
 
 **Input:** Git diff  
@@ -228,7 +308,69 @@ This folder contains the standard checkpoint files created by the Hugging Face T
 ## Key Takeaways
 
 - **QLoRA** enables large-model tuning on consumer hardware (8GB VRAM) with minimal quality loss
-- Dataset quality strongly affects performance  
+- Dataset quality strongly affects performance
 - Perplexity ≈ 17 indicates strong modeling for this task
 - Only LoRA adapters (~few MB) need to be saved, not the entire model
 - Full training completed in ~13 hours on a single RTX 4060
+
+---
+
+## Configuration
+
+All training parameters are managed through [`config.yaml`](config.yaml). Key sections:
+
+### Model (`model`)
+- `model_id`: Base model to fine-tune
+- `max_length`: Maximum sequence length
+- `lora_r`, `lora_alpha`: LoRA hyperparameters
+- `lora_target_modules`: Which layers to apply LoRA
+
+### Data (`data`)
+- `dataset_name`: Hugging Face dataset name
+- `train_samples`, `val_samples`, `test_samples`: Dataset size limits
+- `use_cached_tokenized`: Skip tokenization if cached data exists
+
+### Training (`training`)
+- `output_dir`: Where to save checkpoints
+- `per_device_train_batch_size`: Batch size per GPU
+- `gradient_accumulation_steps`: Gradient accumulation
+- `learning_rate`: Learning rate
+- `max_steps`: Maximum training steps
+- `early_stopping_patience`: Early stopping patience
+
+### Logging (`logging`)
+- `level`: Log level (DEBUG, INFO, WARNING, ERROR)
+- `log_file`: Path to log file
+- `log_to_console`: Enable console logging
+
+---
+
+## Python API
+
+You can also use the package as a Python library:
+
+```python
+from commit_message_llm import load_config, DataProcessor, ModelSetup, TrainerWrapper
+from commit_message_llm.inference import CommitMessageGenerator
+
+# Load configuration
+config = load_config("config.yaml")
+
+# For training
+processor = DataProcessor(config.data)
+splits = processor.get_splits()
+
+model_setup = ModelSetup(config.model)
+tokenizer = model_setup.load_tokenizer()
+model = model_setup.load_model()
+model = model_setup.prepare_for_kbit_training(model)
+model = model_setup.apply_lora(model)
+
+trainer = TrainerWrapper(model, tokenizer, config)
+result = trainer.train(train_dataset, val_dataset)
+
+# For inference
+generator = CommitMessageGenerator("qwen2.5-coder-0.5b-qlora")
+result = generator.generate("diff --git a/file.py...")
+print(result.commit_message)
+```

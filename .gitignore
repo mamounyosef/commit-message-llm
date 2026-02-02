@@ -209,3 +209,6 @@ marimo/_lsp/
 __marimo__/
 Notes for the README file.txt
 fine_tune.ipynb
+
+# Project-specific
+logs/

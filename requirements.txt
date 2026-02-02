@@ -10,3 +10,13 @@ datasets==4.4.1
 
 # System / GPU utils (pinned)
 pynvml==13.0.1
+
+# Configuration
+pyyaml==6.0.2
+
+# Testing
+pytest==8.3.5
+pytest-cov==6.0.0
+
+# Logging (optional, for enhanced logging)
+# loguru>=0.7.0
