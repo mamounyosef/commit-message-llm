@@ -343,4 +343,19 @@ commit-message-llm/
 `-- requirements.txt          # Dependencies
 ```
 
+---
 
+## Third-Party Attribution
+
+This project is built on third-party model and dataset assets:
+
+- Base model: `Qwen/Qwen2.5-Coder-0.5B` (Apache-2.0)
+- Dataset: `Maxscha/commitbench`
+
+### License Scope (Important)
+
+- Project source code in this repository is licensed under Apache-2.0 (see `LICENSE`).
+- Trained model adapters/checkpoints and derivative model artifacts are non-commercial constrained due to training on CommitBench (`Maxscha/commitbench`, CC BY-NC 4.0).
+- If you redistribute trained artifacts, treat them as non-commercial-use only unless you retrain on data with commercial-compatible terms.
+
+For attribution and redistribution notes, see `THIRD_PARTY_NOTICES.md`.

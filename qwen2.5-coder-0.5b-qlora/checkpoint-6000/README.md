@@ -9,7 +9,7 @@ tags:
 - qlora
 - commit-message-generation
 - code-summarization
-license: apache-2.0
+license: cc-by-nc-4.0
 language:
 - en
 ---
@@ -33,7 +33,8 @@ This model is a **QLoRA (4-bit quantized LoRA)** adapter trained on the Qwen2.5-
 - **Developed by:** Mamoun Yosef
 - **Model type:** Causal Language Model (Decoder-only Transformer) with LoRA adapters
 - **Language(s):** English
-- **License:** Apache 2.0
+- **License:** CC BY-NC 4.0 (non-commercial constraint for this trained adapter)
+- **Base model license:** Apache 2.0 (`Qwen/Qwen2.5-Coder-0.5B`)
 - **Finetuned from model:** Qwen/Qwen2.5-Coder-0.5B
 
 ### Model Sources
