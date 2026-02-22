@@ -6,86 +6,6 @@ Fine-tuning **Qwen2.5-Coder-0.5B** LLM using **QLoRA** (4-bit quantization + LoR
 
 ---
 
-## Quick Start
-
-### Installation
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Training
-
-```bash
-# Train with default configuration (config.yaml)
-python train.py
-
-# Train with custom hyperparameters
-python train.py --learning-rate 1e-4 --max-steps 3000 --batch-size 4
-
-# Evaluate only (skip training)
-python train.py --eval-only
-
-# View all options
-python train.py --help
-```
-
-### Inference
-
-```bash
-# Generate from a diff string
-python infer.py --diff "diff --git a/file.py b/file.py..."
-
-# Generate from current git diff
-python infer.py --git
-
-# Interactive mode (read diff from stdin)
-echo "diff --git..." | python infer.py --interactive
-
-# Generate from a file
-python infer.py --diff-file changes.patch
-
-# Output in JSON format
-python infer.py --git --json
-
-# Save to file
-python infer.py --git --output commit_message.txt
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# Run with coverage
-pytest tests/ --cov=commit_message_llm --cov-report=html
-```
-
----
-
-## Project Structure
-
-```
-commit-message-llm/
-├── commit_message_llm/       # Python package
-│   ├── config/               # Configuration management
-│   ├── data/                 # Data processing & tokenization
-│   ├── model/                # Model setup & LoRA config
-│   ├── training/             # Training logic & callbacks
-│   ├── evaluation/           # Metrics & evaluation
-│   ├── inference/            # Commit message generation
-│   └── utils/                # Logging & GPU utilities
-├── tests/                    # Unit tests
-├── config.yaml               # Configuration file
-├── train.py                  # Training entry point
-├── infer.py                  # Inference entry point
-└── requirements.txt          # Dependencies
-```
-
----
-
 ## Task
 
 **Input:** Git diff  
@@ -107,7 +27,7 @@ Training setup:
 - Remove trivial messages (fix, update, etc.)
 - Remove reference-only commits (fix #123)
 - Remove placeholder tokens (`<HASH>`, `<URL>`)
-- Diff length: 50–8000 chars
+- Diff length: 50-8000 chars
 - Message must have real semantic content
 
 ### Final Size
@@ -137,7 +57,7 @@ Qwen models come in two variants:
 - **PT (Pretrained / Base)**: Raw language model trained for next-token prediction
 - **IT (Instruction-Tuned)**: Further aligned for chat and instruction following
 
-We fine-tune the **PT (base) model** instead of the IT model because our task (diff → commit message) is a direct supervised generation task. Using the base model avoids chat-style or verbose outputs and gives cleaner, more controllable commit messages.
+We fine-tune the **PT (base) model** instead of the IT model because our task (diff -> commit message) is a direct supervised generation task. Using the base model avoids chat-style or verbose outputs and gives cleaner, more controllable commit messages.
 
 ---
 
@@ -285,7 +205,7 @@ This folder contains the standard checkpoint files created by the Hugging Face T
 | `tokenizer_config.json` | Tokenizer configuration |
 | `tokenizer.json` | Full tokenizer vocabulary and merges |
 
-**Note:** The base model weights are NOT included—only the LoRA adapters. To use this checkpoint, load the base `Qwen2.5-Coder-0.5B` model and apply these adapters.
+**Note:** The base model weights are NOT included - only the LoRA adapters. To use this checkpoint, load the base `Qwen2.5-Coder-0.5B` model and apply these adapters.
 
 ---
 
@@ -309,7 +229,7 @@ This folder contains the standard checkpoint files created by the Hugging Face T
 
 - **QLoRA** enables large-model tuning on consumer hardware (8GB VRAM) with minimal quality loss
 - Dataset quality strongly affects performance
-- Perplexity ≈ 17 indicates strong modeling for this task
+- Perplexity ~17 indicates strong modeling for this task
 - Only LoRA adapters (~few MB) need to be saved, not the entire model
 - Full training completed in ~13 hours on a single RTX 4060
 
@@ -345,32 +265,82 @@ All training parameters are managed through [`config.yaml`](config.yaml). Key se
 
 ---
 
-## Python API
+## Quick Start
 
-You can also use the package as a Python library:
+### Installation
 
-```python
-from commit_message_llm import load_config, DataProcessor, ModelSetup, TrainerWrapper
-from commit_message_llm.inference import CommitMessageGenerator
-
-# Load configuration
-config = load_config("config.yaml")
-
-# For training
-processor = DataProcessor(config.data)
-splits = processor.get_splits()
-
-model_setup = ModelSetup(config.model)
-tokenizer = model_setup.load_tokenizer()
-model = model_setup.load_model()
-model = model_setup.prepare_for_kbit_training(model)
-model = model_setup.apply_lora(model)
-
-trainer = TrainerWrapper(model, tokenizer, config)
-result = trainer.train(train_dataset, val_dataset)
-
-# For inference
-generator = CommitMessageGenerator("qwen2.5-coder-0.5b-qlora")
-result = generator.generate("diff --git a/file.py...")
-print(result.commit_message)
+```bash
+# Install dependencies
+pip install -r requirements.txt
 ```
+
+### Training
+
+```bash
+# Train with default configuration (config.yaml)
+python train.py
+
+# Train with custom hyperparameters
+python train.py --learning-rate 1e-4 --max-steps 3000 --batch-size 4
+
+# Evaluate only (skip training)
+python train.py --eval-only
+
+# View all options
+python train.py --help
+```
+
+### Inference
+
+```bash
+# Generate from a diff string
+python infer.py --diff "diff --git a/file.py b/file.py..."
+
+# Generate from current git diff
+python infer.py --git
+
+# Interactive mode (read diff from stdin)
+echo "diff --git..." | python infer.py --interactive
+
+# Generate from a file
+python infer.py --diff-file changes.patch
+
+# Output in JSON format
+python infer.py --git --json
+
+# Save to file
+python infer.py --git --output commit_message.txt
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run with coverage
+pytest tests/ --cov=commit_message_llm --cov-report=html
+```
+
+---
+
+## Project Structure
+
+```text
+commit-message-llm/
+|-- commit_message_llm/       # Python package
+|   |-- config/               # Configuration management
+|   |-- data/                 # Data processing and tokenization
+|   |-- model/                # Model setup and LoRA config
+|   |-- training/             # Training logic and callbacks
+|   |-- evaluation/           # Metrics and evaluation
+|   |-- inference/            # Commit message generation
+|   `-- utils/                # Logging and GPU utilities
+|-- tests/                    # Unit tests
+|-- config.yaml               # Configuration file
+|-- train.py                  # Training entry point
+|-- infer.py                  # Inference entry point
+`-- requirements.txt          # Dependencies
+```
+
+
